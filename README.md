@@ -16,6 +16,10 @@ If you follow this steps, you can use this project easily for yourself.
 8. You are almost done. If you now run [bot.py](../master/bot.py), all you need to do is log into your account. Follow the instructions on screen.
 9. Now you are really done.
 
+## Warning
+
+This bot uses the emoji 🎶 to determine if the current one is an active spotify biography or not. This means you mustn't use this emoji on your original biographies or the bot will probably break. Don't do it, thanks.
+
 ## Issues? Need help? Want to tell me something?
 
 Well, just create an issue here. You can also ping me on [telegram](https://t.me/poolitzer).
