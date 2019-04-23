@@ -23,7 +23,7 @@ This bot uses the emoji 🎶 to determine if the current one is an active spotif
 
 ## Important Information
 
-You can shut the bot down if you want/need to. Write `//stop` anywhere you want. If you change the command, edit SHUTDOWN_COMMAND in the [constants](/constants.py).
+You can shut the bot down if you want/need to. Write `//stop` anywhere you want. If you want to change the command, edit SHUTDOWN_COMMAND in the [constants](/constants.py).
 
 ## Issues? Need help? Want to tell me something?
 
