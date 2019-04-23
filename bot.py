@@ -188,7 +188,7 @@ async def refresh():
 @client.on(events.NewMessage(outgoing=True, pattern=SHUTDOWN_COMMAND))
 async def shutdown_handler(event):
     logger.error("SHUT DOWN")
-    await event.reply("Shut down")
+    await client.send_message(LOG, "[INFO]\n\nShutdown was successfully initiated.")
     await client.disconnect()
 
 client.start()
