@@ -73,13 +73,13 @@ async def work():
         # 200 means user plays smth
         if r.status_code == 200:
             received = r.json()
-            if to_insert['item']:
+            if received["item"]:
                 to_insert["title"] = received["item"]["name"]
                 to_insert["done"] = ms_converter(received["progress_ms"])
                 to_insert["artist"] = received['item']["artists"][0]["name"]
                 to_insert["duration"] = ms_converter(received["item"]["duration_ms"])
             else:
-                # currently item is not passed when the user plays a podcast
+                # currently item is not passed when the user plays a Podcast
                 await client.send_message(LOG, "[INFO]\n\nThis playback didnt give me any informations, so I skipped "
                                                "it")
         # 429 means flood limit, we need to wait
