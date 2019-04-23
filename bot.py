@@ -86,8 +86,8 @@ async def work():
                 to_insert["duration"] = ms_converter(received["item"]["duration_ms"])
             else:
                 # currently item is not passed when the user plays a podcast
-                await client.send_message(LOG, f"[INFO]\n\nThe playback {received['currently_playing_type']} didn't "
-                                               f"gave me any additional information, so I skipped updating the bio.")
+                await client.send_message(LOG, f"**[INFO]**\n\nThe playback {received['currently_playing_type']} didn't"
+                                               f" gave me any additional information, so I skipped updating the bio.")
                 # to stop unwanted spam, we sent this only once. After a successful update (or a closing of spotify), we
                 # reset that
                 database.save_info(True)
@@ -95,7 +95,7 @@ async def work():
         elif r.status_code == 429:
             to_wait = r.headers['Retry-After']
             logger.error(f"Spotify, have to wait for {str(to_wait)}")
-            await client.send_message(LOG, f'[WARNING]\n\nI caught a spotify api limit. I shall sleep for '
+            await client.send_message(LOG, f'**[WARNING]**\n\nI caught a spotify api limit. I shall sleep for '
                                            f'{str(to_wait)} seconds until I refresh again')
             skip = True
             await asyncio.sleep(int(to_wait))
@@ -104,7 +104,7 @@ async def work():
             pass
         # catch anything else and stop the whole program since I dont know what happens here
         else:
-            await client.send_message(LOG, '[ERROR]\n\nOK, so something went reeeally wrong with spotify.'
+            await client.send_message(LOG, '**[ERROR]**\n\nOK, so something went reeeally wrong with spotify.'
                                            '\nStatus code: ' + str(r.status_code) + '\n\nText: ' + r.text)
             logger.error(f"Spotify, error {str(r.status_code)}, text: {r.text}")
             loop.stop()
@@ -128,7 +128,7 @@ async def work():
                     string = '🎶 : ' + to_insert["title"]
                 # everything fails, we notify the user that we can't update
                 if len(string) > 69:
-                    to_send = f"[INFO]\n\nThe current track exceeded the character limit, so the bio wasn't " \
+                    to_send = f"**[INFO]**\n\nThe current track exceeded the character limit, so the bio wasn't " \
                         f"updated.\n\n Track: {to_insert['title']}\nInterpret: {to_insert['artist']}"
                     await client.send_message(LOG, to_send)
                     # see line 91-92
@@ -159,8 +159,8 @@ async def work():
         except FloodWaitError as e:
             to_wait = e.seconds
             logger.error(f"to wait for {str(to_wait)}")
-            await client.send_message(LOG, f'[WARNING]\n\nI caught a telegram api limit. I shall sleep {str(to_wait)} '
-                                           f'seconds until I refresh again')
+            await client.send_message(LOG, f'**[WARNING]**\n\nI caught a telegram api limit. I shall sleep '
+                                           f'{str(to_wait)} seconds until I refresh again')
             skip = True
             await asyncio.sleep(int(to_wait))
         # Im not sure if this skip actually works or the task gets repeated after the sleep, but it doesn't hurt ;P
@@ -184,15 +184,22 @@ async def refresh():
     await asyncio.sleep(received["expires_in"])
 
 
+# little message that the bot was started
+async def startup():
+    await client.send_message(LOG, "**[INFO]**\n\nUserbot was successfully started.")
+
+
 # shutdown handler in case the bot foes nuts (again)
 @client.on(events.NewMessage(outgoing=True, pattern=SHUTDOWN_COMMAND))
-async def shutdown_handler(event):
+async def shutdown_handler(_):
     logger.error("SHUT DOWN")
-    await client.send_message(LOG, "[INFO]\n\nShutdown was successfully initiated.")
+    await client.send_message(LOG, "**[INFO]**\n\nShutdown was successfully initiated.")
     await client.disconnect()
+
 
 client.start()
 loop = asyncio.get_event_loop()
 loop.create_task(refresh())
 loop.create_task(work())
+loop.create_task(startup())
 client.run_until_disconnected()
