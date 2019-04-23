@@ -6,6 +6,7 @@ body = {"client_id": CLIENT_ID, "client_secret": CLIENT_SECRET,
         "code": INITIAL_TOKEN}
 r = requests.post("https://accounts.spotify.com/api/token", data=body)
 save = r.json()
-to_create = {'bio': INITIAL_BIO, 'access_token': save['access_token'], 'refresh_token': save['refresh_token']}
+to_create = {'bio': INITIAL_BIO, 'access_token': save['access_token'], 'refresh_token': save['refresh_token'],
+             'info': False}
 with open('./database.json', 'w') as outfile:
     json.dump(to_create, outfile, indent=4, sort_keys=True)

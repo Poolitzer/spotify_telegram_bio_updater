@@ -1,14 +1,14 @@
 import asyncio
-from constants import API_HASH, API_ID, CLIENT_ID, CLIENT_SECRET, LOG
+from constants import API_HASH, API_ID, CLIENT_ID, CLIENT_SECRET, LOG, SHUTDOWN_COMMAND
 import json
 import logging
 import requests
-from telethon import TelegramClient
+from telethon import TelegramClient, events
 from telethon.errors import FloodWaitError
 from telethon.tl.functions.account import UpdateProfileRequest
 from telethon.tl.functions.users import GetFullUserRequest
 device_model = "spotify_bot"
-version = "1.2"
+version = "1.3"
 system_version, app_version = version, version
 client = TelegramClient('spotify', API_ID, API_HASH, device_model=device_model,
                         system_version=system_version, app_version=app_version)
@@ -33,17 +33,20 @@ class Database:
     def __init__(self):
         self.db = json.load(open("./database.json"))
 
-    def token_save(self, token):
+    def save_token(self, token):
         self.db["access_token"] = token
         self.save()
 
-    def refresh_save(self, token):
+    def save_refresh(self, token):
         self.db["refresh_token"] = token
         self.save()
 
-    def bio_save(self, bio):
+    def save_bio(self, bio):
         self.db["bio"] = bio
         self.save()
+
+    def save_info(self, insert):
+        self.db["info"] = insert
 
     def return_token(self):
         return self.db["access_token"]
@@ -53,6 +56,9 @@ class Database:
 
     def return_bio(self):
         return self.db["bio"]
+
+    def return_info(self):
+        return self.db["info"]
 
     def save(self):
         with open('./database.json', 'w') as outfile:
@@ -73,15 +79,18 @@ async def work():
         # 200 means user plays smth
         if r.status_code == 200:
             received = r.json()
-            if received["item"]:
+            if received["currently_playing_type"] == "track":
                 to_insert["title"] = received["item"]["name"]
                 to_insert["done"] = ms_converter(received["progress_ms"])
                 to_insert["artist"] = received['item']["artists"][0]["name"]
                 to_insert["duration"] = ms_converter(received["item"]["duration_ms"])
             else:
-                # currently item is not passed when the user plays a Podcast
-                await client.send_message(LOG, "[INFO]\n\nThis playback didnt give me any informations, so I skipped "
-                                               "it")
+                # currently item is not passed when the user plays a podcast
+                await client.send_message(LOG, f"[INFO]\n\nThe playback {received['currently_playing_type']} didn't "
+                                               f"gave me any additional information, so I skipped updating the bio.")
+                # to stop unwanted spam, we sent this only once. After a successful update (or a closing of spotify), we
+                # reset that
+                database.save_info(True)
         # 429 means flood limit, we need to wait
         elif r.status_code == 429:
             to_wait = r.headers['Retry-After']
@@ -101,7 +110,7 @@ async def work():
             loop.stop()
         # TELEGRAM
         try:
-            # ful needed, since we dont get a bio with the normal request
+            # full needed, since we dont get a bio with the normal request
             full = await client(GetFullUserRequest('me'))
             bio = full.about
             # to_insert means we have a successful playback
@@ -122,22 +131,28 @@ async def work():
                     to_send = f"[INFO]\n\nThe current track exceeded the character limit, so the bio wasn't " \
                         f"updated.\n\n Track: {to_insert['title']}\nInterpret: {to_insert['artist']}"
                     await client.send_message(LOG, to_send)
+                    # see line 91-92
+                    database.save_info(True)
                 else:
                     # test if the user changed his bio in the meantime
                     if "🎶" not in bio:
-                        database.bio_save(bio)
+                        database.save_bio(bio)
                     # test if the bio isn't the same
                     if not string == bio:
                         await client(UpdateProfileRequest(about=string))
-            # not to_insert means no playback currently
+                        # see line 91-92 why
+                        database.save_info(False)
+            # not to_insert means no playback
             else:
+                # see line 91-92 why
+                database.save_info(False)
                 old_bio = database.return_bio()
                 # this means an old playback is in the bio, so we change it back to the original one
                 if "🎶" in bio:
                     await client(UpdateProfileRequest(about=database.return_bio()))
                 # this means a new original is there, lets save it
                 elif not bio == old_bio:
-                    database.bio_save(bio)
+                    database.save_bio(bio)
                 # this means the original one we saved is still valid
                 else:
                     pass
@@ -162,11 +177,19 @@ async def refresh():
     received = r.json()
     # if a new refresh is token as well, we save it here
     try:
-        database.refresh_save(received["refresh_token"])
+        database.save_refresh(received["refresh_token"])
     except KeyError:
         pass
-    database.token_save(received["access_token"])
+    database.save_token(received["access_token"])
     await asyncio.sleep(received["expires_in"])
+
+
+# shutdown handler in case the bot foes nuts (again)
+@client.on(events.NewMessage(outgoing=True, pattern=SHUTDOWN_COMMAND))
+async def shutdown_handler(event):
+    logger.error("SHUT DOWN")
+    await event.reply("Shut down")
+    await client.disconnect()
 
 client.start()
 loop = asyncio.get_event_loop()
