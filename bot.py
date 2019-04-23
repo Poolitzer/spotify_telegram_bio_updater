@@ -8,7 +8,7 @@ from telethon.errors import FloodWaitError
 from telethon.tl.functions.account import UpdateProfileRequest
 from telethon.tl.functions.users import GetFullUserRequest
 device_model = "spotify_bot"
-version = "1.1"
+version = "1.2"
 system_version, app_version = version, version
 client = TelegramClient('spotify', API_ID, API_HASH, device_model=device_model,
                         system_version=system_version, app_version=app_version)
@@ -80,12 +80,13 @@ async def work():
                 to_insert["duration"] = ms_converter(received["item"]["duration_ms"])
             except KeyError:
                 # currently item is not passed when the user playes a Podcast, item is not passed
-                await client.send_message(LOG, "This playback didnt give me any informations, so I skipped it")
+                await client.send_message(LOG, "[INFO]\n\nThis playback didnt give me any informations, so I skipped "
+                                               "it")
         # 429 means flood limit, we need to wait
         elif r.status_code == 429:
             to_wait = r.headers['Retry-After']
             logger.error(f"Spotify, have to wait for {str(to_wait)}")
-            await client.send_message(LOG, f'I caught a spotify api limit. I shall sleep for '
+            await client.send_message(LOG, f'[WARNING]\n\nI caught a spotify api limit. I shall sleep for '
                                            f'{str(to_wait)} seconds until I refresh again')
             skip = True
             await asyncio.sleep(int(to_wait))
@@ -94,8 +95,8 @@ async def work():
             pass
         # catch anything else and stop the whole program since I dont know what happens here
         else:
-            await client.send_message(LOG, 'OK, so something went reeeally wrong on spotify.\nStatus code: ' +
-                                      str(r.status_code) + '\n\nText: ' + r.text)
+            await client.send_message(LOG, '[ERROR]\n\nOK, so something went reeeally wrong with spotify.'
+                                           '\nStatus code: ' + str(r.status_code) + '\n\nText: ' + r.text)
             logger.error(f"Spotify, error {str(r.status_code)}, text: {r.text}")
             loop.stop()
         # TELEGRAM
@@ -118,10 +119,13 @@ async def work():
                     string = '🎶 : ' + to_insert["title"]
                 # everything fails, we notify the user that we can't update
                 if len(string) > 69:
-                    to_send = f"The current track exceeded the character limit, so the bio wasn't updated.\n\n" \
-                        f"Track: {to_insert['title']}\nInterpret: {to_insert['artist']}"
+                    to_send = f"[INFO]\n\nThe current track exceeded the character limit, so the bio wasn't " \
+                        f"updated.\n\n Track: {to_insert['title']}\nInterpret: {to_insert['artist']}"
                     await client.send_message(LOG, to_send)
                 else:
+                    # test if the user changed his bio in the meantime
+                    if "🎶" not in bio:
+                        database.bio_save(bio)
                     # test if the bio isn't the same
                     if not string == bio:
                         await client(UpdateProfileRequest(about=string))
@@ -131,7 +135,6 @@ async def work():
                 # this means an old playback is in the bio, so we change it back to the original one
                 if "🎶" in bio:
                     await client(UpdateProfileRequest(about=database.return_bio()))
-                    database.bio_save("")
                 # this means a new original is there, lets save it
                 elif not bio == old_bio:
                     database.bio_save(bio)
@@ -141,8 +144,8 @@ async def work():
         except FloodWaitError as e:
             to_wait = e.seconds
             logger.error(f"to wait for {str(to_wait)}")
-            await client.send_message(LOG, f'I caught a telegram api limit. I shall sleep {str(to_wait)} seconds '
-                                           f'until I refresh again')
+            await client.send_message(LOG, f'[WARNING]\n\nI caught a telegram api limit. I shall sleep {str(to_wait)} '
+                                           f'seconds until I refresh again')
             skip = True
             await asyncio.sleep(int(to_wait))
         # Im not sure if this skip actually works or the task gets repeated after the sleep, but it doesn't hurt ;P

@@ -2,6 +2,6 @@ CLIENT_ID = ""
 CLIENT_SECRET = ""
 API_ID = 0
 API_HASH = ""
-INITIAL_BIO = ""
 INITIAL_TOKEN = ""
+INITIAL_BIO = ""
 LOG = "me"
