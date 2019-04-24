@@ -102,11 +102,25 @@ async def work():
         # 204 means user plays nothing, since to_insert is false, we dont need to change anything
         elif r.status_code == 204:
             pass
-        # catch anything else and stop the whole program since I dont know what happens here
+        # 401 means our access token is expired, so we need to refresh it
+        elif r.status_code == 401:
+            data = {"client_id": CLIENT_ID, "client_secret": CLIENT_SECRET,
+                    "grant_type": "refresh_token",
+                    "refresh_token": database.return_refresh()}
+            r = requests.post("https://accounts.spotify.com/api/token", data=data)
+            received = r.json()
+            # if a new refresh is token as well, we save it here
+            try:
+                database.save_refresh(received["refresh_token"])
+            except KeyError:
+                pass
+            database.save_token(received["access_token"])
+        # catch anything else
         else:
-            await client.send_message(LOG, '**[ERROR]**\n\nOK, so something went reeeally wrong with spotify.'
-                                           '\nStatus code: ' + str(r.status_code) + '\n\nText: ' + r.text)
+            await client.send_message(LOG, '**[ERROR]**\n\nOK, so something went reeeally wrong with spotify. The bot '
+                                           'was stopped.\nStatus code: ' + str(r.status_code) + '\n\nText: ' + r.text)
             logger.error(f"Spotify, error {str(r.status_code)}, text: {r.text}")
+            # stop the whole program since I dont know what happens here and this is the safest thing we can do
             loop.stop()
         # TELEGRAM
         try:
@@ -168,22 +182,6 @@ async def work():
             await asyncio.sleep(30)
 
 
-# this refresh is needed since the access token expires after some hours.
-async def refresh():
-    data = {"client_id": CLIENT_ID, "client_secret": CLIENT_SECRET,
-            "grant_type": "refresh_token",
-            "refresh_token": database.return_refresh()}
-    r = requests.post("https://accounts.spotify.com/api/token", data=data)
-    received = r.json()
-    # if a new refresh is token as well, we save it here
-    try:
-        database.save_refresh(received["refresh_token"])
-    except KeyError:
-        pass
-    database.save_token(received["access_token"])
-    await asyncio.sleep(received["expires_in"])
-
-
 # little message that the bot was started
 async def startup():
     await client.send_message(LOG, "**[INFO]**\n\nUserbot was successfully started.")
@@ -199,7 +197,6 @@ async def shutdown_handler(_):
 
 client.start()
 loop = asyncio.get_event_loop()
-loop.create_task(refresh())
 loop.create_task(work())
 loop.create_task(startup())
 client.run_until_disconnected()
