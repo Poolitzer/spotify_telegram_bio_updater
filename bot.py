@@ -1,14 +1,14 @@
 import asyncio
-from constants import API_HASH, API_ID, CLIENT_ID, CLIENT_SECRET, LOG, SHUTDOWN_COMMAND
+from constants import API_HASH, API_ID, CLIENT_ID, CLIENT_SECRET, LOG, SHUTDOWN_COMMAND, BIOS, LIMIT
 import json
 import logging
 import requests
 from telethon import TelegramClient, events
-from telethon.errors import FloodWaitError
+from telethon.errors import FloodWaitError, AboutTooLongError
 from telethon.tl.functions.account import UpdateProfileRequest
 from telethon.tl.functions.users import GetFullUserRequest
 device_model = "spotify_bot"
-version = "1.3"
+version = "1.4"
 system_version, app_version = version, version
 client = TelegramClient('spotify', API_ID, API_HASH, device_model=device_model,
                         system_version=system_version, app_version=app_version)
@@ -81,16 +81,19 @@ async def work():
             received = r.json()
             if received["currently_playing_type"] == "track":
                 to_insert["title"] = received["item"]["name"]
-                to_insert["done"] = ms_converter(received["progress_ms"])
-                to_insert["artist"] = received['item']["artists"][0]["name"]
+                to_insert["progress"] = ms_converter(received["progress_ms"])
+                to_insert["interpret"] = received['item']["artists"][0]["name"]
                 to_insert["duration"] = ms_converter(received["item"]["duration_ms"])
             else:
-                # currently item is not passed when the user plays a podcast
-                await client.send_message(LOG, f"**[INFO]**\n\nThe playback {received['currently_playing_type']} didn't"
-                                               f" gave me any additional information, so I skipped updating the bio.")
-                # to stop unwanted spam, we sent this only once. After a successful update (or a closing of spotify), we
-                # reset that
-                database.save_info(True)
+                if not database.return_info():
+                    # currently item is not passed when the user plays a podcast
+                    string = f"**[INFO]**\n\nThe playback {received['currently_playing_type']} didn't gave me any " \
+                        f"additional information, so I skipped updating the bio."
+                    await client.send_message(LOG, string)
+                    # to stop unwanted spam, we sent these type of message only once. So we have a variable in our
+                    # database which we check for in return_info. When we send a message, we set this variable to true.
+                    # After a successful update (or a closing of spotify), we reset that variable to false.
+                    database.save_info(True)
         # 429 means flood limit, we need to wait
         elif r.status_code == 429:
             to_wait = r.headers['Retry-After']
@@ -115,6 +118,8 @@ async def work():
             except KeyError:
                 pass
             database.save_token(received["access_token"])
+            # since we didnt actually update our status yet, lets do this without the 30 seconds wait
+            skip = True
         # catch anything else
         else:
             await client.send_message(LOG, '**[ERROR]**\n\nOK, so something went reeeally wrong with spotify. The bot '
@@ -129,36 +134,54 @@ async def work():
             bio = full.about
             # to_insert means we have a successful playback
             if to_insert:
-                # testing for the 70 character limit, 69 since the emoji counts two times for telegram
-                string = '🎶 Now Playing: ' + to_insert["artist"] + ' - ' + to_insert["title"] + ' ' \
-                         + to_insert["done"] + '/' + to_insert["duration"]
-                if len(string) > 69:
-                    string = '🎶 Now Playing: ' + to_insert["artist"] + ' - ' + to_insert["title"]
-                if len(string) > 69:
-                    string = '🎶 : ' + to_insert["artist"] + ' - ' + to_insert["title"]
-                if len(string) > 69:
-                    string = '🎶 Now Playing: ' + to_insert["title"]
-                if len(string) > 69:
-                    string = '🎶 : ' + to_insert["title"]
-                # everything fails, we notify the user that we can't update
-                if len(string) > 69:
-                    to_send = f"**[INFO]**\n\nThe current track exceeded the character limit, so the bio wasn't " \
-                        f"updated.\n\n Track: {to_insert['title']}\nInterpret: {to_insert['artist']}"
-                    await client.send_message(LOG, to_send)
-                    # see line 91-92
-                    database.save_info(True)
-                else:
-                    # test if the user changed his bio in the meantime
+                # putting our collected information's into nice variables
+                title = to_insert["title"]
+                interpret = to_insert["interpret"]
+                progress = to_insert["progress"]
+                duration = to_insert["duration"]
+                # we need this variable to see if actually one of the bios is below the character limit
+                new_bio = ""
+                for bio in BIOS:
+                    temp = bio.format(title=title, interpret=interpret, progress=progress, duration=duration)
+                    # we try to not ignore for telegrams character limit here
+                    if len(temp) < LIMIT:
+                        # this is short enough, so we put it in the variable and break our for loop
+                        new_bio = temp
+                        break
+                # if we have a bio, one bio was short enough
+                if new_bio:
+                    # test if the user changed his bio in the meantime, if yes, we save it before we override
                     if "🎶" not in bio:
                         database.save_bio(bio)
-                    # test if the bio isn't the same
-                    if not string == bio:
-                        await client(UpdateProfileRequest(about=string))
-                        # see line 91-92 why
-                        database.save_info(False)
+                    # test if the bio isn't the same, otherwise updating it would be stupid
+                    if not new_bio == bio:
+                        try:
+                            await client(UpdateProfileRequest(about=new_bio))
+                            # see line 93-95 why
+                            database.save_info(False)
+                        # this can happen if our LIMIT check failed because telegram counts emojis twice and python
+                        # doesnt. Refer to the constants file to learn more about this
+                        except AboutTooLongError:
+                            # see line 93-95 why
+                            if not database.return_info():
+                                stringy = f'**[WARNING]**\n\nThe biography I tried to insert was too long. In order ' \
+                                    f'to not let that happen again in the future, please read the part about OFFSET ' \
+                                    f'in the constants. Anyway, here is the bio I tried to insert:\n\n{new_bio}'
+                                await client.send_message(LOG, stringy)
+                                # see line 93-95 why
+                                database.save_info(True)
+                # if we dont have a bio, everything was too long, so we tell the user that
+                if not new_bio:
+                    to_send = f"**[INFO]**\n\nThe current track exceeded the character limit, so the bio wasn't " \
+                        f"updated.\n\n Track: {title}\nInterpret: {interpret}"
+                    # see line 93-95 why
+                    if not database.return_info():
+                        await client.send_message(LOG, to_send)
+                        # see line 93-95 why
+                        database.save_info(True)
             # not to_insert means no playback
             else:
-                # see line 91-92 why
+                # see line 93-95 why
                 database.save_info(False)
                 old_bio = database.return_bio()
                 # this means an old playback is in the bio, so we change it back to the original one
@@ -177,7 +200,7 @@ async def work():
                                            f'{str(to_wait)} seconds until I refresh again')
             skip = True
             await asyncio.sleep(int(to_wait))
-        # Im not sure if this skip actually works or the task gets repeated after the sleep, but it doesn't hurt ;P
+        # skip means a flood error stopped the whole program, no need to wait another 30 seconds after that
         if not skip:
             await asyncio.sleep(30)
 
