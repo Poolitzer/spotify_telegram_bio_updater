@@ -150,8 +150,11 @@ async def work():
                         break
                 # if we have a bio, one bio was short enough
                 if new_bio:
+                    # test if the user changed his bio to blank, we save it before we override
+                    if not bio:
+                        database.save_bio(bio)
                     # test if the user changed his bio in the meantime, if yes, we save it before we override
-                    if "🎶" not in bio:
+                    elif "🎶" not in bio:
                         database.save_bio(bio)
                     # test if the bio isn't the same, otherwise updating it would be stupid
                     if not new_bio == bio:
@@ -184,8 +187,11 @@ async def work():
                 # see line 93-95 why
                 database.save_info(False)
                 old_bio = database.return_bio()
+                # this means the bio is blank, so we save that as the new one
+                if not bio:
+                    database.save_bio(bio)
                 # this means an old playback is in the bio, so we change it back to the original one
-                if "🎶" in bio:
+                elif "🎶" in bio:
                     await client(UpdateProfileRequest(about=database.return_bio()))
                 # this means a new original is there, lets save it
                 elif not bio == old_bio:
