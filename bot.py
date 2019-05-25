@@ -8,11 +8,12 @@ from telethon.errors import FloodWaitError, AboutTooLongError
 from telethon.tl.functions.account import UpdateProfileRequest
 from telethon.tl.functions.users import GetFullUserRequest
 device_model = "spotify_bot"
-version = "1.4"
+version = "1.5"
 system_version, app_version = version, version
 client = TelegramClient('spotify', API_ID, API_HASH, device_model=device_model,
                         system_version=system_version, app_version=app_version)
-logging.basicConfig(level=logging.ERROR, filename='log.log')
+logging.basicConfig(level=logging.ERROR, filename='log.log',
+                    format='[%(levelname) 5s/%(asctime)s] %(name)s: %(message)s')
 logger = logging.getLogger(__name__)
 
 
@@ -31,7 +32,11 @@ def ms_converter(millis):
 
 class Database:
     def __init__(self):
-        self.db = json.load(open("./database.json"))
+        try:
+            self.db = json.load(open("./database.json"))
+        except FileNotFoundError:
+            print("You need to run generate.py first, please read the Readme.")
+            loop.stop()
 
     def save_token(self, token):
         self.db["access_token"] = token
@@ -45,8 +50,8 @@ class Database:
         self.db["bio"] = bio
         self.save()
 
-    def save_info(self, insert):
-        self.db["info"] = insert
+    def save_spam(self, which, what):
+        self.db[which + "_spam"] = what
 
     def return_token(self):
         return self.db["access_token"]
@@ -57,8 +62,8 @@ class Database:
     def return_bio(self):
         return self.db["bio"]
 
-    def return_info(self):
-        return self.db["info"]
+    def return_spam(self, which):
+        return self.db[which + "_spam"]
 
     def save(self):
         with open('./database.json', 'w') as outfile:
@@ -66,6 +71,33 @@ class Database:
 
 
 database = Database()
+
+# to stop unwanted spam, we sent these type of message only once. So we have a variable in our database which we check
+# for in return_info. When we send a message, we set this variable to true. After a successful update
+# (or a closing of spotify), we reset that variable to false.
+
+
+def save_spam(which, what):
+    # see below why
+
+    # this is if False is inserted, so if spam = False, so if everything is good.
+    if not what:
+        # if it wasn't normal before, we proceed
+        if database.return_spam(which):
+            # we save that it is normal now
+            database.save_spam(which, False)
+            # we return True so we can test against it and if it this function returns, we can send a fitting message
+            return True
+    # this is if True is inserted, so if spam = True, so if something went wrong
+    else:
+        # if it was normal before, we proceed
+        if not database.return_spam(which):
+            # we save that it is not normal now
+            database.save_spam(which, True)
+            # we return True so we can send a message
+            return True
+    # if True wasn't returned before, we can return False now so our test fails and we dont send a message
+    return False
 
 
 async def work():
@@ -84,16 +116,16 @@ async def work():
                 to_insert["progress"] = ms_converter(received["progress_ms"])
                 to_insert["interpret"] = received['item']["artists"][0]["name"]
                 to_insert["duration"] = ms_converter(received["item"]["duration_ms"])
+                if save_spam("spotify", False):
+                    stringy = "**[INFO]**\n\nEverything returned back to normal, the previous spotify issue has been " \
+                              "resolved."
+                    await client.send_message(LOG, stringy)
             else:
-                if not database.return_info():
+                if save_spam("spotify", True):
                     # currently item is not passed when the user plays a podcast
                     string = f"**[INFO]**\n\nThe playback {received['currently_playing_type']} didn't gave me any " \
                         f"additional information, so I skipped updating the bio."
                     await client.send_message(LOG, string)
-                    # to stop unwanted spam, we sent these type of message only once. So we have a variable in our
-                    # database which we check for in return_info. When we send a message, we set this variable to true.
-                    # After a successful update (or a closing of spotify), we reset that variable to false.
-                    database.save_info(True)
         # 429 means flood limit, we need to wait
         elif r.status_code == 429:
             to_wait = r.headers['Retry-After']
@@ -104,6 +136,10 @@ async def work():
             await asyncio.sleep(int(to_wait))
         # 204 means user plays nothing, since to_insert is false, we dont need to change anything
         elif r.status_code == 204:
+            if save_spam("spotify", False):
+                stringy = "**[INFO]**\n\nEverything returned back to normal, the previous spotify issue has been " \
+                          "resolved."
+                await client.send_message(LOG, stringy)
             pass
         # 401 means our access token is expired, so we need to refresh it
         elif r.status_code == 401:
@@ -120,6 +156,21 @@ async def work():
             database.save_token(received["access_token"])
             # since we didnt actually update our status yet, lets do this without the 30 seconds wait
             skip = True
+        # 502 means bad gateway, its an issue on spotify site which we can do nothing about. 30 seconds wait shouldn't
+        # put too much pressure on the spotify server, so we are just going to notify the user once
+        elif r.status_code == 502:
+            if save_spam("spotify", True):
+                string = f"**[WARNING]**\n\nSpotify returned a Bad gateway, which means they have a problem on their " \
+                    f"servers. The bot will continue to run but may not update the bio for a short time."
+                await client.send_message(LOG, string)
+        # 503 means service unavailable, its an issue on spotify site which we can do nothing about. 30 seconds wait
+        # shouldn't put too much pressure on the spotify server, so we are just going to notify the user once
+        elif r.status_code == 503:
+            if save_spam("spotify", True):
+                string = f"**[WARNING]**\n\nSpotify said that the service is unavailable, which means they have a " \
+                         f"problem on their servers. The bot will continue to run but may not update the bio for a " \
+                         f"short time."
+                await client.send_message(LOG, string)
         # catch anything else
         else:
             await client.send_message(LOG, '**[ERROR]**\n\nOK, so something went reeeally wrong with spotify. The bot '
@@ -160,32 +211,30 @@ async def work():
                     if not new_bio == bio:
                         try:
                             await client(UpdateProfileRequest(about=new_bio))
-                            # see line 93-95 why
-                            database.save_info(False)
+                            if save_spam("telegram", False):
+                                stringy = "**[INFO]**\n\nEverything returned back to normal, the previous telegram " \
+                                          "issue has been resolved."
+                                await client.send_message(LOG, stringy)
                         # this can happen if our LIMIT check failed because telegram counts emojis twice and python
                         # doesnt. Refer to the constants file to learn more about this
                         except AboutTooLongError:
-                            # see line 93-95 why
-                            if not database.return_info():
+                            if save_spam("telegram", True):
                                 stringy = f'**[WARNING]**\n\nThe biography I tried to insert was too long. In order ' \
                                     f'to not let that happen again in the future, please read the part about OFFSET ' \
                                     f'in the constants. Anyway, here is the bio I tried to insert:\n\n{new_bio}'
                                 await client.send_message(LOG, stringy)
-                                # see line 93-95 why
-                                database.save_info(True)
                 # if we dont have a bio, everything was too long, so we tell the user that
                 if not new_bio:
-                    to_send = f"**[INFO]**\n\nThe current track exceeded the character limit, so the bio wasn't " \
-                        f"updated.\n\n Track: {title}\nInterpret: {interpret}"
-                    # see line 93-95 why
-                    if not database.return_info():
+                    if save_spam("telegram", True):
+                        to_send = f"**[INFO]**\n\nThe current track exceeded the character limit, so the bio wasn't " \
+                            f"updated.\n\n Track: {title}\nInterpret: {interpret}"
                         await client.send_message(LOG, to_send)
-                        # see line 93-95 why
-                        database.save_info(True)
             # not to_insert means no playback
             else:
-                # see line 93-95 why
-                database.save_info(False)
+                if save_spam("telegram", False):
+                    stringy = "**[INFO]**\n\nEverything returned back to normal, the previous telegram issue has " \
+                              "been resolved."
+                    await client.send_message(LOG, stringy)
                 old_bio = database.return_bio()
                 # this means the bio is blank, so we save that as the new one
                 if not bio:
@@ -216,11 +265,14 @@ async def startup():
     await client.send_message(LOG, "**[INFO]**\n\nUserbot was successfully started.")
 
 
-# shutdown handler in case the bot foes nuts (again)
+# shutdown handler in case the bot goes nuts (again)
 @client.on(events.NewMessage(outgoing=True, pattern=SHUTDOWN_COMMAND))
 async def shutdown_handler(_):
     logger.error("SHUT DOWN")
     await client.send_message(LOG, "**[INFO]**\n\nShutdown was successfully initiated.")
+    # just so everything is saved - it should be anyway, but just to be sure
+    database.save()
+    # this stops the whole loop
     await client.disconnect()
 
 

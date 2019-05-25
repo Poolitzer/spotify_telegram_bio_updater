@@ -13,7 +13,7 @@ If you follow this steps, you can use this project easily for yourself.
 5. Paste all these values in their respective variables at [constants.py](/constants.py). While you are at it, you can also paste an initial biography there. Just take your current one. This is highly recommended. If you don't do this **and** have a currently playing track, the bot has at its first start no idea what your original biography is. Just do it, please.
 6. If you want to have a log channel or group or so, paste its invite link or id in the LOG variable. If you leave it at "me", you will see those in your saved chat. Only if errors occur ofc ;)
 7. Now you can run [generate.py](/generate.py). This will generate a json file named database.
-8. You are almost done. If you now run [bot.py](/bot.py), all you need to do is log into your account. Follow the instructions on screen.
+8. You are almost done. If you now run [bot.py](/bot.py), all you need to do is log into your telegram account. Follow the instructions on screen.
 9. Now you are really done.
 
 ## Important Information
