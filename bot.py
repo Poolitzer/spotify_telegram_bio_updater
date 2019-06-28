@@ -171,6 +171,12 @@ async def work():
                          f"problem on their servers. The bot will continue to run but may not update the bio for a " \
                          f"short time."
                 await client.send_message(LOG, string)
+        # 404 is a spotify error which isn't supposed to happen (since our URL is correct). Track the issue here:
+        # https://github.com/spotify/web-api/issues/1280
+        elif r.status_code == 404:
+            if save_spam("spotify", True):
+                string = f"**[INFO]**\n\nSpotify returned a 404 error, which is a bug on their side."
+                await client.send_message(LOG, string)
         # catch anything else
         else:
             await client.send_message(LOG, '**[ERROR]**\n\nOK, so something went reeeally wrong with spotify. The bot '
