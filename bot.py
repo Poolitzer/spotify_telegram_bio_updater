@@ -323,7 +323,9 @@ async def help(event):
 `{CMD}restart`: to restart the bot.
     """
     await event.edit(help_panel,link_preview=True)
- 
+
+#------------------------------------------------------------time_readable_funtion-------------------------------------
+
 @client.on(events.NewMessage(outgoing=True, pattern=CMD_PREFIX + "getsong"))
 async def get_song(event):
 	oauth = {
