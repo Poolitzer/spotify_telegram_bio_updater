@@ -1,20 +1,21 @@
-CLIENT_ID = ""
-CLIENT_SECRET = ""
-API_ID = 0
-API_HASH = ""
-INITIAL_TOKEN = ""
-INITIAL_BIO = ""
-LOG = "me"
+CLIENT_ID = " "
+CLIENT_SECRET = " "
+API_ID = 01345
+API_HASH = " "
+SESSION_KEY = " "
+INITIAL_TOKEN = " "
+INITIAL_BIO = "Existence is painfull! Zoldyck Family™♥️//Spam here @MedevilofMarvel"
+LOG = chat_id
 # the escaping is necessary since we are testing against a regex pattern with it.
-SHUTDOWN_COMMAND = "\/\/stop"
+CMD_PREFIX = '\?' 
 # The key which is used to determine if the current bio was generated from the bot ot from the user. This means:
 # NEVER use whatever you put here in your original bio. NEVER. Don't do it!
 KEY = '🎶'
 # The bios MUST include the key. The bot will go though those and check if they are beneath telegrams character limit.
-BIOS = [KEY + ' Now Playing: {interpret} - {title} {progress}/{duration}',
-        KEY + ' Now Playing: {interpret} - {title}',
+BIOS = [KEY + ' Now Playing Spotify: {interpret} - {title} {progress}/{duration}',
+        KEY + ' Now Playing Spotify: {interpret} - {title}',
         KEY + ' : {interpret} - {title}',
-        KEY + ' Now Playing: {title}',
+        KEY + ' Now Playing Spotify: {title}',
         KEY + ' : {title}']
 # Mind that some characters (e.g. emojis) count more in telegram more characters then in python. If you receive an
 # AboutTooLongError and get redirected here, you need to increase the offset. Check the special characters you either
