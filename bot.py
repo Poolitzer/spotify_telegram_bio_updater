@@ -440,7 +440,7 @@ async def bio_handler(event):
 		bio_mode = "`Spotify`"
 		lrt = get_readable_time((time.time() - work.lrt))
 		bio_s += f"\n**Last refresh:** {lrt} ago"
-	bio_s += f"\n**Currently in {bio_mode} mode.**"
+		bio_s += f"\n**Currently in {bio_mode} mode.**"
 	await event.edit(bio_s)
 
 # little message that the bot was started
