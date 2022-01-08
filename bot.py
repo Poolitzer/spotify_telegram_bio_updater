@@ -276,7 +276,7 @@ async def startup():
 # shutdown handler in case the bot goes nuts (again)
 @client.on(events.NewMessage(outgoing=True, pattern=SHUTDOWN_COMMAND))
 async def shutdown_handler(_):
-    logger.error("SHUT DOWN")
+    logger.error("Initiating shut down")
     await client.send_message(LOG, "**[INFO]**\n\nShutdown was successfully initiated.")
     # just so everything is saved - it should be anyway, but just to be sure
     database.save()
@@ -294,3 +294,4 @@ async def main():
 
 if __name__ == '__main__':
     asyncio.run(main())
+    logger.error("Shut down complete")
