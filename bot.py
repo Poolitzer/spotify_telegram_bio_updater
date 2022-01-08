@@ -36,7 +36,7 @@ class Database:
             self.db = json.load(open("./database.json"))
         except FileNotFoundError:
             print("You need to run generate.py first, please read the Readme.")
-            loop.stop()
+            asyncio.get_running_loop().stop()
 
     def save_token(self, token):
         self.db["access_token"] = token
@@ -183,7 +183,7 @@ async def work():
                                            'was stopped.\nStatus code: ' + str(r.status_code) + '\n\nText: ' + r.text)
             logger.error(f"Spotify, error {str(r.status_code)}, text: {r.text}")
             # stop the whole program since I dont know what happens here and this is the safest thing we can do
-            loop.stop()
+            asyncio.get_running_loop().stop()
         # TELEGRAM
         try:
             # full needed, since we dont get a bio with the normal request
@@ -282,8 +282,12 @@ async def shutdown_handler(_):
     await client.disconnect()
 
 
-client.start()
-loop = asyncio.get_event_loop()
-loop.create_task(work())
-loop.create_task(startup())
-client.run_until_disconnected()
+async def main():
+    await client.start()
+    loop = asyncio.get_running_loop()
+    loop.create_task(work())
+    loop.create_task(startup())
+    await client.run_until_disconnected()
+
+if __name__ == '__main__':
+    asyncio.run(main())
